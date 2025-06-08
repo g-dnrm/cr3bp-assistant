@@ -1,0 +1,7 @@
+httpx~=0.28.1
+fastapi~=0.115.12
+requests~=2.32.3
+numpy~=2.2.6
+matplotlib~=3.10.3
+scipy~=1.15.3
+numba~=0.61.2
