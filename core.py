@@ -600,6 +600,7 @@ class CR3BPExporter:
                 writer.writerow([idx + 1] + [orbit[k] for k in self.fields] + [period_days])
 
         print(f"✅ Filtered orbit data exported to: {filename}")
+        return filename
 
     def to_cfg(self, index, filename=None):
         """
@@ -670,6 +671,7 @@ class CR3BPExporter:
             config.write(configfile)
 
         print(f"✅ Configuration file exported: {filename}")
+        return filename
 
     def export_propagated_orbit_csv(self, index, filename=None, num_points=500):
         """
@@ -724,6 +726,7 @@ class CR3BPExporter:
                 writer.writerow([f"{t:.17g}"] + [f"{x:.17g}" for x in row])
 
         print(f"✅ Propagated orbit trajectory saved to: {filename}")
+        return filename
 
     def find_orbits_by_property(self, key, target_value, tol=1e-6):
         """
@@ -944,20 +947,24 @@ class CR3BPPlotter:
 
         return x, y, z
 
-    def _autoscale_axes(self, ax, x, y, z):
+    def _autoscale_axes(self, ax, x, y, z, padding=0.05):
         """
         Sets equal aspect ratio and scaling for a 3D plot.
 
         Args:
             ax (Axes3D): The 3D matplotlib axis.
             x, y, z (np.ndarray): Orbit coordinates.
+            padding (float): Fractional padding to add to box size.
         """
         all_xyz = np.vstack([x, y, z])
-        center = np.mean(all_xyz, axis=1)
-        half_range = np.max(np.ptp(all_xyz, axis=1)) / 2
-        ax.set_xlim(center[0] - half_range, center[0] + half_range)
-        ax.set_ylim(center[1] - half_range, center[1] + half_range)
-        ax.set_zlim(center[2] - half_range, center[2] + half_range)
+        mins = np.min(all_xyz, axis=1)
+        maxs = np.max(all_xyz, axis=1)
+        centers = (mins + maxs) / 2
+        half_range = np.max(maxs - mins) / 2 * (1 + padding)
+
+        ax.set_xlim(centers[0] - half_range, centers[0] + half_range)
+        ax.set_ylim(centers[1] - half_range, centers[1] + half_range)
+        ax.set_zlim(centers[2] - half_range, centers[2] + half_range)
 
     def _plot_libration_point(self, ax, dimensionless):
         """
@@ -985,7 +992,8 @@ class CR3BPPlotter:
         ax.scatter([lx], [ly], [lz], s=60, c='black', marker='o', label=name)
         ax.text(lx, ly, lz, f' {name}', fontsize=10)
 
-    def plot_orbit_by_property(self, key, value, dimensionless=False):
+    def plot_orbit_by_property(self, key, value, dimensionless=False, save_path=None,
+                               azim=-60, elev=30):
         """
         Finds and plots a single orbit matching a given property.
 
@@ -993,6 +1001,9 @@ class CR3BPPlotter:
             key (str): Property to match ("jacobi", "period", or "stability").
             value (float): Value to match.
             dimensionless (bool): Plot in LU/TU if True, else km/km/s.
+            save_path (str, optional): If provided, saves the plot to this path instead of showing it.
+            azim (int, optional): Azimuth angle for 3D view. Defaults to -60.
+            elev (int, optional): Elevation angle for 3D view. Defaults to 30.
         """
         tol = 1e-12
         raw_orbits = [
@@ -1019,6 +1030,7 @@ class CR3BPPlotter:
         ax.set_xlabel(f"x ({unit})")
         ax.set_ylabel(f"y ({unit})")
         ax.set_zlabel(f"z ({unit})")
+        ax.view_init(elev=elev, azim=azim)
 
         if key == "period":
             period_days = value * self.tunit / 86400
@@ -1028,9 +1040,17 @@ class CR3BPPlotter:
 
         ax.set_title(title)
         plt.tight_layout()
-        plt.show()
 
-    def plot_family_by_range(self, key, val_range=None, dimensionless=False, max_display=25):
+        if save_path:
+            plt.savefig(save_path)
+            plt.close(fig)
+            return save_path
+        else:
+            plt.show()
+            return None
+
+    def plot_family_by_range(self, key, val_range=None, dimensionless=False, max_display=25, azim=-60, elev=30,
+                             save_path=None):
         """
         Plots a sample of orbits in the family colored by a property.
 
@@ -1039,6 +1059,9 @@ class CR3BPPlotter:
             val_range (tuple): Optional (min, max) range for filtering.
             dimensionless (bool): Plot in LU/TU if True, else km/km/s.
             max_display (int): Max number of orbits to show.
+            azim (int): Azimuth angle for 3D view.
+            elev (int): Elevation angle for 3D view.
+            save_path (str): If provided, saves the plot to this path.
         """
         raw_orbits = [
             dict(zip(self.fields, map(float, row)))
@@ -1063,7 +1086,7 @@ class CR3BPPlotter:
         all_xyz = []
 
         for orbit in selected:
-            x, y, z = self._propagate_orbit(orbit)
+            x, y, z = self._propagate_orbit(orbit, num_points=1000)
             if not dimensionless:
                 x, y, z = x * self.lunit, y * self.lunit, z * self.lunit
             all_xyz.append(np.vstack([x, y, z]))
@@ -1071,17 +1094,24 @@ class CR3BPPlotter:
 
         self._plot_libration_point(ax, dimensionless)
         all_xyz = np.hstack(all_xyz)
-        self._autoscale_axes(ax, all_xyz[0], all_xyz[1], all_xyz[2])
+        self._autoscale_axes(ax, all_xyz[0], all_xyz[1], all_xyz[2], padding=0.2)
 
         unit = "LU" if dimensionless else "km"
         ax.set_xlabel(f"x ({unit})")
         ax.set_ylabel(f"y ({unit})")
         ax.set_zlabel(f"z ({unit})")
-        print("🧪 System name captured in plotter:", self.system)
         ax.set_title(f"{self.system} - {self.family_label} - Colored by {key.title()}")
+        ax.view_init(elev=elev, azim=azim)
 
         sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
         sm.set_array([])
-        plt.colorbar(sm, ax=ax, label=key.title())
+        plt.colorbar(sm, ax=ax, label=key.title(), fraction=0.02, pad=0.1)
         plt.tight_layout()
-        plt.show()
+
+        if save_path:
+            plt.savefig(save_path)
+            plt.close(fig)
+            return save_path
+        else:
+            plt.show()
+            return None
