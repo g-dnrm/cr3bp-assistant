@@ -4,7 +4,7 @@ import json
 import argparse
 
 # === Config ===
-BASE_URL = "http://localhost:8000"  # or your Render proxy URL
+BASE_URL = "https://cr3bp-proxy.onrender.com"  # or your Render proxy URL
 
 def query_orbits(args):
     payload = {
