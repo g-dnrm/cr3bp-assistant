@@ -1,0 +1,18 @@
+# Ignore everything by default
+*
+
+# But do not ignore the .gitignore itself
+!.gitignore
+
+# Allow the README
+!README.md
+
+# Allow requirements.txt
+!requirements.txt
+
+# Allow all Python files
+!*.py
+
+# Allow the docs folder and its content (optional)
+!docs/
+!docs/**
