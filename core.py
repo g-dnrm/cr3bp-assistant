@@ -93,7 +93,7 @@ class CR3BPOrbitAPI:
             return {"error": f"Family '{family}' does not support branch selection."}
 
         try:
-            response = self.session.get(self.BASE_URL, params=params)
+            response = self.session.post(self.BASE_URL, params=params)
             if response.status_code != 200:
                 return {"error": f"HTTP {response.status_code}: {response.reason}"}
 
