@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, Tuple
 import tempfile
+from functools import lru_cache
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize
 import numpy as np
@@ -59,12 +60,19 @@ class OrbitFamilyPlotRequest(BaseModel):
     elev: int = 30
 
 # ==== Endpoints ====
+
+@lru_cache(maxsize=500)
+def cached_nasa_query(**params):
+    raw_api = CR3BPOrbitAPI(use_proxy=False)
+    return raw_api.query(**params)
+
 @app.post("/orbits/query")
 def query_orbits(req: QueryRequest):
     try:
         api = CR3BPOrbitAPI(use_proxy=False)
-        builder = CR3BPQueryBuilder(api)
+        api.query = cached_nasa_query
 
+        builder = CR3BPQueryBuilder(api)
         result_bundle = builder.fetch_with_filters(
             sys=req.sys,
             family=req.family,
@@ -78,7 +86,6 @@ def query_orbits(req: QueryRequest):
         return result_bundle
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
-
 
 @app.post("/orbits/info")
 def get_orbit_metadata(result_bundle: Dict[str, Any] = Body(...)):
