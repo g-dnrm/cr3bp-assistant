@@ -47,20 +47,18 @@ class CR3BPOrbitAPI:
         "resonant": {}
     }
 
-    def __init__(self):
+    def __init__(self, use_proxy=False):
         """
-            Initializes the API to always use NASA's official CR3BP periodic orbits catalog.
+        Initializes the API with optional proxy routing.
 
-            Note:
-                - All queries for orbit data (families, limits, selection) are performed
-                  directly against NASA's live API at:
-                  https://ssd-api.jpl.nasa.gov/periodic_orbits.api
-
-                - Any additional custom endpoints (e.g., for plots, exports) must be handled
-                  separately through your own proxy or tools. This class does NOT route those.
-
-            """
-        self.BASE_URL = "https://ssd-api.jpl.nasa.gov/periodic_orbits.api"
+        Args:
+            use_proxy (bool): If True, uses a custom proxy endpoint instead of NASA's API.
+        """
+        self.BASE_URL = (
+            "https://your-server.com/query_orbits"  # Replace with your proxy URL if needed
+            if use_proxy else
+            "https://ssd-api.jpl.nasa.gov/periodic_orbits.api"
+        )
         self.session = requests.Session()
 
     def query(self, **params):
