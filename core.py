@@ -50,12 +50,9 @@ class CR3BPOrbitAPI:
     def __init__(self, use_proxy=False):
         """
         Initializes the API with optional proxy routing.
-
-        Args:
-            use_proxy (bool): If True, uses a custom proxy endpoint instead of NASA's API.
         """
         self.BASE_URL = (
-            "https://your-server.com/query_orbits"  # Replace with your proxy URL if needed
+            "https://your-server.com/query_orbits"
             if use_proxy else
             "https://ssd-api.jpl.nasa.gov/periodic_orbits.api"
         )
@@ -63,16 +60,8 @@ class CR3BPOrbitAPI:
 
     def query(self, **params):
         """
-        Executes a validated GET request to the CR3BP periodic orbit API.
-
-        Args:
-            sys (str): System name (e.g., 'earth-moon')
-            family (str): Orbit family name (e.g., 'halo')
-            libr (int, optional): Libration point (only if family supports it)
-            branch (str, optional): 'N', 'S', 'E', 'W' for families with branch direction
-
-        Returns:
-            dict: JSON response with metadata added, or error details.
+        Executes a query to the CR3BP periodic orbit API
+        with fallback defaults and metadata enhancement.
         """
         sys = params.get("sys")
         family = params.get("family")
@@ -82,15 +71,12 @@ class CR3BPOrbitAPI:
         if not sys or not family:
             raise ValueError("Both 'sys' and 'family' must be specified.")
 
-        family = family.lower()
-        meta = self.FAMILY_META.get(family)
-        if meta is None:
-            return {"error": f"Unknown family: '{family}'."}
+        # Defensive: default periodunits to TU if missing
+        params.setdefault("periodunits", "TU")
 
-        if libr is not None and "libration_points" not in meta:
-            return {"error": f"Family '{family}' does not support libration point selection."}
-        if branch is not None and "branches" not in meta:
-            return {"error": f"Family '{family}' does not support branch selection."}
+        # Family name for downstream use
+        family = family.lower()
+        meta = self.FAMILY_META.get(family, {})
 
         try:
             if "ssd-api.jpl.nasa.gov" in self.BASE_URL:
@@ -102,6 +88,8 @@ class CR3BPOrbitAPI:
                 return {"error": f"HTTP {response.status_code}: {response.reason}"}
 
             data = response.json()
+
+            # Augment metadata for clarity
             sys_metadata = data.get("system", {})
             data.update({
                 "system": {
@@ -137,10 +125,7 @@ class CR3BPQueryBuilder:
     """
     Builds and executes CR3BP periodic orbit catalog queries using the CR3BPOrbitAPI.
 
-    Delegates orbit family taxonomy parsing to a unified label logic (via CR3BPResultInterpreter).
-
-    Attributes:
-        api (CR3BPOrbitAPI): An instance of the API interface.
+    Relies on upstream validation from the proxy server for family, libr, and branch.
     """
 
     def __init__(self, api):
@@ -149,60 +134,45 @@ class CR3BPQueryBuilder:
     def _standardize_family(self, family):
         return family.strip().lower()
 
-    def _validate_query_parameters(self, sys, family, libr, branch):
-        """
-        Validates that required parameters are consistent with orbit family taxonomy.
-        Raises:
-            ValueError if required parameters are missing or invalid.
-        """
-        f = self._standardize_family(family)
-        with_libr = f in {"lyapunov", "halo", "vertical", "axial", "long", "short"}
-        needs_branch = f in {"halo", "vertical", "butterfly", "dragonfly", "axial"}
-
-        if with_libr and libr not in [1, 2, 3, 4, 5]:
-            raise ValueError(f"Family '{family}' requires libration point (1-5).")
-        if needs_branch and branch not in {"N", "S"}:
-            raise ValueError(f"Family '{family}' requires a branch: 'N' or 'S'.")
-
     def fetch_with_filters(self, sys, family, libr=None, branch=None,
                            jacobi_override=None, period_override=None,
                            stability_override=None, periodunits="TU"):
         """
-        Performs a validated filtered query to the CR3BP orbit catalog.
+        Performs a filtered query to the CR3BP orbit catalog.
 
         Args:
             sys (str): System name (e.g., "earth-moon").
             family (str): Orbit family name.
             libr (int, optional): Libration point (1-5) if needed.
-            branch (str, optional): 'N' or 'S' for northern/southern families.
+            branch (str, optional): Branch identifier if needed.
             jacobi_override (tuple, optional): (min, max) Jacobi filter.
             period_override (tuple, optional): (min, max) Period filter.
             stability_override (tuple, optional): (min, max) Stability filter.
-            periodunits (str): "TU" or "days".
+            periodunits (str): "TU", "s", "h", or "d".
 
         Returns:
-            dict: A dictionary containing the filters and API result.
+            dict: A dictionary containing the filters and the API result.
         """
-        self._validate_query_parameters(sys, family, libr, branch)
 
+        # Base validated query parameters (all guaranteed by the proxy)
         base_params = {
             "sys": sys,
-            "family": family.lower()
+            "family": self._standardize_family(family)
         }
         if libr is not None:
             base_params["libr"] = libr
         if branch is not None:
             base_params["branch"] = branch
 
-        # Initial query to get valid bounds
+        # Initial query to get full limits
         result = self.api.query(**base_params)
         if "error" in result or "warning" in result:
             return {"filters": base_params, "result": result}
 
+        # Load limits & user filters
         filter_manager = CR3BPFilterManager()
         filter_manager.load_limits_from_response(result)
 
-        # Load filters
         if jacobi_override:
             filter_manager.set_filter_range("jacobi", jacobi_override)
         if period_override:
@@ -210,14 +180,15 @@ class CR3BPQueryBuilder:
         if stability_override:
             filter_manager.set_filter_range("stability", stability_override)
 
-        # Set periodunits on period filter if necessary
+        # Set periodunits on period filter explicitly
         if "period" in filter_manager.filters:
             filter_manager.filters["period"].periodunits = periodunits
 
+        # Generate final filter query
         filters = filter_manager.generate_filter_query()
 
-        # Final query with filters
-        final_query = {**base_params, **filters}
+        # Final query with filters applied
+        final_query = {**base_params, **filters, "periodunits": periodunits}
         refined_result = self.api.query(**final_query)
 
         return {
@@ -233,6 +204,8 @@ class BaseFilter:
         self.user_range = None
 
     def set_user_range(self, val_range):
+        if not isinstance(val_range, (list, tuple)) or len(val_range) != 2:
+            raise ValueError(f"{self.name} range must be a (min, max) tuple.")
         if val_range[0] > val_range[1]:
             raise ValueError(f"{self.name} range must be min ≤ max.")
         self.user_range = val_range
@@ -252,11 +225,14 @@ class JacobiFilter(BaseFilter):
 class PeriodFilter(BaseFilter):
     def __init__(self, limits, periodunits="TU"):
         super().__init__("period", limits)
-        self.periodunits = periodunits
+        self.periodunits = periodunits  # by design, always overwritten upstream
 
     def get_query_params(self):
         if not self.user_range:
             return {}
+        # Defensive: optional guard
+        if self.periodunits not in {"s", "h", "d", "TU"}:
+            raise ValueError(f"Invalid periodunits: {self.periodunits}")
         return {
             "periodmin": self.user_range[0],
             "periodmax": self.user_range[1],
@@ -294,8 +270,7 @@ class CR3BPFilterManager:
         try:
             limits = response_json["limits"]
             self.filters["jacobi"] = JacobiFilter("jacobi", limits["jacobi"])
-            self.filters["period"] = PeriodFilter(limits["period"],
-                                                  periodunits=response_json.get("filter", {}).get("periodunits", "TU"))
+            self.filters["period"] = PeriodFilter(limits["period"])
             self.filters["stability"] = StabilityFilter("stability", limits["stability"])
 
         except (KeyError, ValueError) as e:

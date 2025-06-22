@@ -1,7 +1,9 @@
 from fastapi import FastAPI, Query, Body, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator, model_validator
+from enum import Enum
 from typing import Optional, Dict, Any, Tuple
+import re
 import tempfile
 from functools import lru_cache
 
@@ -15,10 +17,31 @@ from core import (
 
 app = FastAPI(title="CR3BP Periodic Orbits Assistant")
 
+# === ENUMS ===
+class Family(str, Enum):
+    halo = "halo"
+    vertical = "vertical"
+    axial = "axial"
+    lyapunov = "lyapunov"
+    longp = "longp"
+    short = "short"
+    butterfly = "butterfly"
+    dragonfly = "dragonfly"
+    resonant = "resonant"
+    dro = "dro"
+    dpo = "dpo"
+    lpo = "lpo"
+
+class PeriodUnits(str, Enum):
+    s = "s"
+    h = "h"
+    d = "d"
+    TU = "TU"
+
 # ==== Models ====
 class QueryRequest(BaseModel):
     sys: str
-    family: str
+    family: Family
     libr: Optional[int] = None
     branch: Optional[str] = None
     jacobimin: Optional[float] = None
@@ -27,7 +50,55 @@ class QueryRequest(BaseModel):
     periodmax: Optional[float] = None
     stabmin: Optional[float] = None
     stabmax: Optional[float] = None
-    periodunits: Optional[str] = "TU"
+    periodunits: PeriodUnits = PeriodUnits.TU
+
+    @field_validator("sys")
+    def sys_must_be_primary_secondary(cls, v):
+        if not re.fullmatch(r"[a-z]+-[a-z]+", v):
+            raise ValueError("sys must be formatted as 'primary-secondary', lowercase.")
+        return v
+
+    @field_validator("libr")
+    def libr_must_be_in_range(cls, v):
+        if v is not None and not (1 <= v <= 5):
+            raise ValueError("libr must be an integer between 1 and 5.")
+        return v
+
+    @field_validator("periodmin", "periodmax", "stabmin", "stabmax")
+    def must_be_positive(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Values must be positive.")
+        return v
+
+    @model_validator(mode="after")
+    def check_family_requires_libr_and_branch(self):
+        family = self.family
+        libr = self.libr
+        branch = self.branch
+
+        libr_required = {"lyapunov", "halo", "vertical", "axial", "longp", "short"}
+        if family in libr_required and libr is None:
+            raise ValueError(f"Family '{family}' requires a libration point (1–5).")
+
+        branch_rules = {
+            "halo": ["N", "S"],
+            "dragonfly": ["N", "S"],
+            "butterfly": ["N", "S"],
+            "lpo": ["E", "W"],
+            "resonant": "integer"
+        }
+
+        if family in branch_rules:
+            if branch is None:
+                raise ValueError(f"Family '{family}' requires a branch.")
+            allowed = branch_rules[family]
+            if allowed == "integer":
+                if not branch.isdigit():
+                    raise ValueError(f"Family '{family}' requires an integer branch like '12' for 1:2.")
+            elif branch not in allowed:
+                raise ValueError(f"Family '{family}' requires branch in {allowed}.")
+
+        return self
 
 class OrbitSelectRequest(BaseModel):
     index: int
@@ -62,10 +133,10 @@ def cached_nasa_query(**params):
     raw_api = CR3BPOrbitAPI(use_proxy=False)
     return raw_api.query(**params)
 
+# === INFO ENDPOINT ===
 @app.post("/orbits/info")
 def get_family_info(req: QueryRequest):
     try:
-        api = CR3BPOrbitAPI(use_proxy=False)
         result = cached_nasa_query(
             sys=req.sys,
             family=req.family,
@@ -98,9 +169,7 @@ def get_filtered_family(req: QueryRequest):
     try:
         api = CR3BPOrbitAPI(use_proxy=False)
         api.query = cached_nasa_query  # optional cache
-
         builder = CR3BPQueryBuilder(api)
-
         result_bundle = builder.fetch_with_filters(
             sys=req.sys,
             family=req.family,
@@ -112,7 +181,7 @@ def get_filtered_family(req: QueryRequest):
                 if req.periodmin is not None and req.periodmax is not None else None,
             stability_override=(req.stabmin, req.stabmax)
                 if req.stabmin is not None and req.stabmax is not None else None,
-            periodunits=req.periodunits
+            periodunits=req.periodunits.value
         )
 
         # Recompute limits to match filtered data
