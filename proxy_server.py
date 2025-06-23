@@ -144,7 +144,7 @@ def get_family_info(req: QueryRequest):
             branch=req.branch
         )
 
-        interpreter = CR3BPResultInterpreter(result)
+        interpreter = CR3BPResultInterpreter(result, periodunits=req.periodunits.value)
 
         return {
             "system_info": {
@@ -196,6 +196,11 @@ def get_filtered_family(req: QueryRequest):
                     vals = [float(row[idx]) for row in data]
                     limits[key] = [min(vals), max(vals)]
             result_bundle["result"]["limits"] = limits
+
+        interpreter = CR3BPResultInterpreter(result_bundle["result"], periodunits=req.periodunits.value)
+        result_bundle["result"]["data"] = [
+            [orbit[f] for f in interpreter.fields] for orbit in interpreter.orbits
+        ]
 
         return result_bundle
 
