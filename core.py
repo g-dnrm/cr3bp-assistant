@@ -294,7 +294,6 @@ class CR3BPFilterManager:
         return params
 
 # === Result Interpreter ===
-# Refactored version of CR3BPResultInterpreter with full documentation and @property usage
 class CR3BPResultInterpreter:
     """
     Interprets and formats results from a CR3BP periodic orbit API query.
@@ -310,55 +309,45 @@ class CR3BPResultInterpreter:
         fields (list): Orbit variable names
     """
 
-    def __init__(self, response_json: Dict):
+    def __init__(self, response_json: Dict, periodunits: str = "TU"):
         """
-        Initializes the interpreter from raw JSON returned by the CR3BP API.
+        Initializes the interpreter from raw JSON returned by the API.
 
         Args:
             response_json (dict): JSON response from the API.
+            periodunits (str): Desired output units for period: TU, s, h, d
         """
         self.response = response_json
         self.data = response_json.get("data", [])
         self.fields = response_json.get("fields", [])
+        self._periodunits = periodunits.upper()
 
     @property
     def system(self):
-        """Returns system metadata block."""
         return self.response["system"]
 
     @property
     def lunit(self) -> float:
-        """Length unit in km."""
         return float(self.system["lunit"])
 
     @property
     def tunit(self) -> float:
-        """Time unit in seconds."""
         return float(self.system["tunit"])
 
     @property
     def mass_ratio(self) -> float:
-        """Mass ratio μ of the system."""
         return float(self.system["mass_ratio"])
 
     @property
     def system_name(self) -> str:
-        """Returns the system's human-readable name."""
         return self.system.get("name", "unknown")
 
     @property
     def libration_points(self) -> Dict[str, List[float]]:
-        """Extracts Lagrange point coordinates in LU."""
         return {k: list(map(float, v)) for k, v in self.system.items() if k.startswith("L")}
 
     @property
     def orbits(self) -> List[Dict]:
-        """
-        Returns converted orbit data with positions/velocities in km and km/s.
-
-        Returns:
-            list of dict: Orbits with physical units.
-        """
         converted = []
         for row in self.data:
             orbit = dict(zip(self.fields, row))
@@ -366,28 +355,31 @@ class CR3BPResultInterpreter:
                 orbit[k] = float(orbit[k]) * self.lunit
             for k in ["vx", "vy", "vz"]:
                 orbit[k] = float(orbit[k]) * (self.lunit / self.tunit)
-            for k in ["jacobi", "period", "stability"]:
-                orbit[k] = float(orbit[k])
+            orbit["jacobi"] = float(orbit["jacobi"])
+            orbit["stability"] = float(orbit["stability"])
+
+            # 🔑 Period conversion:
+            period_TU = float(orbit["period"])
+            if self._periodunits == "TU":
+                orbit["period"] = period_TU
+            elif self._periodunits == "S":
+                orbit["period"] = period_TU * self.tunit
+            elif self._periodunits == "H":
+                orbit["period"] = period_TU * self.tunit / 3600
+            elif self._periodunits == "D":
+                orbit["period"] = period_TU * self.tunit / 86400
+            else:
+                orbit["period"] = period_TU  # fallback
+
             converted.append(orbit)
         return converted
 
     def get_family_label(self, hyphenated: bool = False) -> str:
-        """
-        Infers a descriptive label for the orbit family from metadata.
-
-        Args:
-            hyphenated (bool): If True, returns a hyphen-safe label for filenames.
-
-        Returns:
-            str: Human-readable or file-safe family name.
-        """
         family = self.response.get("family", "").capitalize()
         libr = self.response.get("libration_point")
         branch = self.response.get("branch", "").upper()
         branch_map = {"N": "Northern", "S": "Southern", "E": "Eastern", "W": "Western"}
-
         sep = "-" if hyphenated else " "
-
         if libr in {1, 2, 3}:
             base = f"L{libr}"
             if family in {"Halo", "Butterfly", "Dragonfly"}:
@@ -402,9 +394,6 @@ class CR3BPResultInterpreter:
         return family
 
     def show_system_info(self):
-        """
-        Displays core system metadata: units, mass ratio, and Lagrange points.
-        """
         print("🪐 System Physical Properties:")
         print(f"- Length unit (LU): {self.lunit:.2f} km")
         print(f"- Time unit (TU): {self.tunit:.2f} sec")
@@ -413,46 +402,25 @@ class CR3BPResultInterpreter:
             print(f"- {label}: x = {coords[0]:.6f} LU, y = {coords[1]:.6f}, z = {coords[2]:.6f}")
 
     def show_limits(self):
-        """
-        Displays Jacobi constant, period, and stability bounds from the result.
-        """
         print("\n📊 Limits for Active Family:")
         for key in ["jacobi", "period", "stability"]:
             if key in self.response.get("limits", {}):
                 low, high = self.response["limits"][key]
                 unit = ""
                 if key == "period":
-                    unit = f" ({self.response.get('filter', {}).get('periodunits', 'TU')})"
+                    unit = f" ({self._periodunits})"
                 print(f"- {key.capitalize()}{unit}: [{low}, {high}]")
 
     def show_orbit_table(self, count=10):
-        """
-        Prints a table summary of the first few orbits (converted to physical units).
-
-        Args:
-            count (int): Number of orbits to show.
-        """
-        print(f"\n📋 Showing first {min(count, len(self.orbits))} orbits (in km and km/sec):")
+        print(f"\n📋 Showing first {min(count, len(self.orbits))} orbits (in km, km/s, period in {self._periodunits}):")
         for i, orbit in enumerate(self.orbits[:count]):
-            print(f"ID {i+1}: Jacobi={orbit['jacobi']:.6f}, Period={orbit['period']:.6f} TU, Stability={orbit['stability']:.2f}")
+            print(f"ID {i+1}: Jacobi={orbit['jacobi']:.6f}, Period={orbit['period']:.6f} {self._periodunits}, Stability={orbit['stability']:.2f}")
 
     def select_orbit_by_index(self, idx, dimensionless=False) -> Dict:
-        """
-        Returns full details for one orbit, with optional LU/TU format.
-
-        Args:
-            idx (int): Orbit index (0-based).
-            dimensionless (bool): Return LU/TU if True, else km/km/s.
-
-        Returns:
-            dict: Orbit dictionary with all fields.
-        """
         if idx < 0 or idx >= len(self.data):
             raise IndexError("Orbit index out of range.")
-
         raw = dict(zip(self.fields, map(float, self.data[idx])))
         converted = self.orbits[idx]
-
         print(f"\n🔍 Full Orbit Details [ID {idx + 1}]")
         for k in self.fields:
             val = raw[k] if dimensionless else converted[k]
@@ -462,19 +430,13 @@ class CR3BPResultInterpreter:
             elif k in ["vx", "vy", "vz"]:
                 unit = "LU/TU" if dimensionless else "km/s"
             elif k == "period":
-                unit = "TU"
+                unit = "TU" if dimensionless else self._periodunits
             elif k == "jacobi":
                 unit = "(LU²/TU²)"
             print(f"{k}: {val:.6f} {unit}")
         return raw if dimensionless else converted
 
     def display_filter_summary(self, filters_dict):
-        """
-        Displays the filter values used in the API query.
-
-        Args:
-            filters_dict (dict): Parameters like jacobimin/max, periodmin/max, etc.
-        """
         label = self.get_family_label()
         print("🔍 Query Filters:")
         print(f"- System: {self.system_name}")
@@ -482,17 +444,13 @@ class CR3BPResultInterpreter:
         if "jacobimin" in filters_dict and "jacobimax" in filters_dict:
             print(f"- Jacobi Constant: {filters_dict['jacobimin']} to {filters_dict['jacobimax']}")
         if "periodmin" in filters_dict and "periodmax" in filters_dict:
-            print(f"- Period ({filters_dict.get('periodunits', 'TU')}): {filters_dict['periodmin']} to {filters_dict['periodmax']}")
+            print(f"- Period ({self._periodunits}): {filters_dict['periodmin']} to {filters_dict['periodmax']}")
         if "stabmin" in filters_dict and "stabmax" in filters_dict:
             print(f"- Stability Index: {filters_dict['stabmin']} to {filters_dict['stabmax']}")
 
     def display_result_count(self):
-        """
-        Displays the number of orbits found in the query result.
-        """
         count = self.response.get("count", "0")
         print(f"\n📦 Found {count} orbits matching filter criteria.")
-
 
 
 class CR3BPExporter:
