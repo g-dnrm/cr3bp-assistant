@@ -135,8 +135,10 @@ def cached_nasa_query(**params):
 
 # === INFO ENDPOINT ===
 @app.post("/orbits/info")
+@app.post("/orbits/info")
 def get_family_info(req: QueryRequest):
     try:
+        # Call the cached NASA query as usual
         result = cached_nasa_query(
             sys=req.sys,
             family=req.family,
@@ -144,7 +146,20 @@ def get_family_info(req: QueryRequest):
             branch=req.branch
         )
 
+        # Pass the desired units to the interpreter!
         interpreter = CR3BPResultInterpreter(result, periodunits=req.periodunits.value)
+
+        # Rewrite the period limits based on requested units
+        limits = result.get("limits", {})
+        if "period" in limits:
+            tunit = interpreter.tunit
+            if req.periodunits == PeriodUnits.s:
+                limits["period"] = [p * tunit for p in limits["period"]]
+            elif req.periodunits == PeriodUnits.h:
+                limits["period"] = [p * tunit / 3600 for p in limits["period"]]
+            elif req.periodunits == PeriodUnits.d:
+                limits["period"] = [p * tunit / 86400 for p in limits["period"]]
+            # else: TU — no change
 
         return {
             "system_info": {
@@ -154,13 +169,14 @@ def get_family_info(req: QueryRequest):
                 "mass_ratio": interpreter.mass_ratio,
                 "libration_points": interpreter.libration_points,
             },
-            "limits": result.get("limits", {}),
+            "limits": limits,
             "count": result.get("count", 0),
             "sample_orbits": interpreter.orbits[:5]
         }
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
 
 
 # FILTERED QUERY — uses user filters, recalculates limits
@@ -184,20 +200,32 @@ def get_filtered_family(req: QueryRequest):
             periodunits=req.periodunits.value
         )
 
-        # Recompute limits to match filtered data
+        # ✅ Recompute limits from raw data
         data = result_bundle["result"].get("data", [])
         fields = result_bundle["result"].get("fields", [])
 
+        limits = {}
         if data and fields:
-            limits = {}
             for key in ["jacobi", "period", "stability"]:
                 if key in fields:
                     idx = fields.index(key)
                     vals = [float(row[idx]) for row in data]
                     limits[key] = [min(vals), max(vals)]
-            result_bundle["result"]["limits"] = limits
 
+        # Now convert period limits to requested units
         interpreter = CR3BPResultInterpreter(result_bundle["result"], periodunits=req.periodunits.value)
+        if "period" in limits:
+            tunit = interpreter.tunit
+            if req.periodunits == PeriodUnits.s:
+                limits["period"] = [p * tunit for p in limits["period"]]
+            elif req.periodunits == PeriodUnits.h:
+                limits["period"] = [p * tunit / 3600 for p in limits["period"]]
+            elif req.periodunits == PeriodUnits.d:
+                limits["period"] = [p * tunit / 86400 for p in limits["period"]]
+            # else: TU — no change
+
+        # Replace data with converted rows (positions, velocities, period in requested units)
+        result_bundle["result"]["limits"] = limits
         result_bundle["result"]["data"] = [
             [orbit[f] for f in interpreter.fields] for orbit in interpreter.orbits
         ]
