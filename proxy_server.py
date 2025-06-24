@@ -135,7 +135,6 @@ def cached_nasa_query(**params):
 
 # === INFO ENDPOINT ===
 @app.post("/orbits/info")
-@app.post("/orbits/info")
 def get_family_info(req: QueryRequest):
     try:
         # Call the cached NASA query as usual
