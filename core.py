@@ -195,6 +195,30 @@ class CR3BPQueryBuilder:
             "filters": final_query,
             "result": refined_result
         }
+    def query_raw_info(self, sys, family, libr=None, branch=None, periodunits="TU"):  # 🆕 Added method
+        """
+        Fetches raw, unfiltered family information directly from the NASA API.
+
+        Args:
+            sys (str): System name.
+            family (str): Orbit family name.
+            libr (int, optional): Libration point.
+            branch (str, optional): Branch identifier.
+            periodunits (str): Period units ("TU", "s", "h", or "d").
+
+        Returns:
+            dict: Raw API result without filtering.
+        """
+        base_params = {
+            "sys": sys,
+            "family": self._standardize_family(family),
+            "periodunits": periodunits
+        }
+        if libr is not None:
+            base_params["libr"] = libr
+        if branch is not None:
+            base_params["branch"] = branch
+        return self.api.query(**base_params)
 
 # === Filter Base and Subclasses ===
 class BaseFilter:

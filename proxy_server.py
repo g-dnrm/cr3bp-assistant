@@ -137,8 +137,15 @@ def cached_nasa_query(**params):
 @app.post("/orbits/info")
 def get_family_info(req: QueryRequest):
     try:
-        params = {k: v for k, v in req.model_dump().items() if v is not None}
-        result = cached_nasa_query(**params)
+        api = CR3BPOrbitAPI(use_proxy=False)
+        builder = CR3BPQueryBuilder(api)
+        result = builder.query_raw_info(
+            sys=req.sys,
+            family=req.family,
+            libr=req.libr,
+            branch=req.branch,
+            periodunits=req.periodunits or "TU"  # Optional fallback
+        )
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -147,7 +154,6 @@ def get_family_info(req: QueryRequest):
 @app.post("/orbits/filter")  # MODIFIED: Return raw NASA filtered results
 def get_filtered_family(req: QueryRequest):
     try:
-        # MODIFIED: Directly query NASA with raw parameters
         params = {k: v for k, v in req.model_dump().items() if v is not None}  # MODIFIED
         result = cached_nasa_query(**params)  # MODIFIED
         return result  # MODIFIED
