@@ -218,7 +218,18 @@ class CR3BPQueryBuilder:
             base_params["libr"] = libr
         if branch is not None:
             base_params["branch"] = branch
-        return self.api.query(**base_params)
+        full_data = self.api.query(**base_params)
+
+        # Strip heavy orbit data
+        return {
+            "signature": full_data.get("signature", {}),
+            "system": full_data.get("system", {}),
+            "limits": full_data.get("limits", {}),
+            "count": full_data.get("count"),
+            "family": full_data.get("family"),
+            "libration_point": full_data.get("libration_point"),
+            "branch": full_data.get("branch")
+        }
 
 # === Filter Base and Subclasses ===
 class BaseFilter:
