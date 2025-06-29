@@ -35,7 +35,8 @@ def get_family_info(args):
     """
     payload = {
         "sys": args.system,
-        "family": args.family.lower()
+        "family": args.family.lower(),
+        "periodunits": args.periodunits
     }
     if args.libr is not None:
         payload["libr"] = args.libr
