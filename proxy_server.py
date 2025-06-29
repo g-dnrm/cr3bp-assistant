@@ -17,6 +17,14 @@ from core import (
 
 app = FastAPI(title="CR3BP Periodic Orbits Assistant")
 
+@app.get("/")
+def root():
+    return {
+        "message": "Welcome to the CR3BP Periodic Orbits API!",
+        "docs": "Visit /docs for the interactive API documentation.",
+        "openapi": "Visit /openapi.json for the OpenAPI schema."
+    }
+
 # === ENUMS ===
 class Family(str, Enum):
     halo = "halo"
