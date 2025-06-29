@@ -39,17 +39,11 @@ class PeriodUnits(str, Enum):
     TU = "TU"
 
 # ==== Models ====
-class QueryRequest(BaseModel):
+class BaseQueryRequest(BaseModel):
     sys: str
     family: Family
     libr: Optional[int] = None
     branch: Optional[str] = None
-    jacobimin: Optional[float] = None
-    jacobimax: Optional[float] = None
-    periodmin: Optional[float] = None
-    periodmax: Optional[float] = None
-    stabmin: Optional[float] = None
-    stabmax: Optional[float] = None
     periodunits: PeriodUnits = PeriodUnits.TU
 
     @field_validator("sys")
@@ -63,6 +57,14 @@ class QueryRequest(BaseModel):
         if v is not None and not (1 <= v <= 5):
             raise ValueError("libr must be an integer between 1 and 5.")
         return v
+
+class FilteredQueryRequest(BaseQueryRequest):
+    jacobimin: Optional[float] = None
+    jacobimax: Optional[float] = None
+    periodmin: Optional[float] = None
+    periodmax: Optional[float] = None
+    stabmin: Optional[float] = None
+    stabmax: Optional[float] = None
 
     @field_validator("periodmin", "periodmax", "stabmin", "stabmax")
     def must_be_positive(cls, v):
@@ -134,8 +136,8 @@ def cached_nasa_query(**params):
     return raw_api.query(**params)
 
 # === INFO ENDPOINT ===
-@app.post("/orbits/info")
-def get_family_info(req: QueryRequest):
+@app.post("/orbits/info", summary="Retrieve orbit family metadata")
+def get_family_info(req: FilteredQueryRequest):
     try:
         api = CR3BPOrbitAPI(use_proxy=False)
         builder = CR3BPQueryBuilder(api)
@@ -144,15 +146,26 @@ def get_family_info(req: QueryRequest):
             family=req.family,
             libr=req.libr,
             branch=req.branch,
-            periodunits=req.periodunits or "TU"  # Optional fallback
+            periodunits=req.periodunits
         )
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 # FILTERED QUERY
-@app.post("/orbits/filter")  # MODIFIED: Return raw NASA filtered results
-def get_filtered_family(req: QueryRequest):
+@app.post("/orbits/filter",  summary="Filter periodic orbits based on constraints")  # MODIFIED: Return raw NASA filtered results
+def get_filtered_family(req: FilteredQueryRequest):
+    """
+     Returns filtered periodic orbits based on system, family, and optional constraints such as
+     Jacobi constant, period, and stability index. Useful for selecting subsets of orbits for
+     analysis, visualization, or mission planning.
+
+     Fields:
+     - `sys`: Primary-secondary system (e.g., "earth-moon")
+     - `family`: Orbit family (e.g., halo, vertical)
+     - Optional filters: `jacobimin`, `jacobimax`, `periodmin`, `periodmax`, `stabmin`, `stabmax`
+     - `periodunits`: Time units (TU, s, h, d)
+     """
     try:
         params = {k: v for k, v in req.model_dump().items() if v is not None}  # MODIFIED
         result = cached_nasa_query(**params)  # MODIFIED
