@@ -145,7 +145,7 @@ def cached_nasa_query(**params):
 
 # === INFO ENDPOINT ===
 @app.post("/orbits/info", summary="Retrieve orbit family metadata")
-def get_family_info(req: FilteredQueryRequest):
+def get_family_info(req: BaseQueryRequest):
     try:
         api = CR3BPOrbitAPI(use_proxy=False)
         builder = CR3BPQueryBuilder(api)
