@@ -143,6 +143,11 @@ def cached_nasa_query(**params):
     raw_api = CR3BPOrbitAPI(use_proxy=False)
     return raw_api.query(**params)
 
+def query_nasa_direct(**params):
+    raw_api = CR3BPOrbitAPI(use_proxy=False)
+    return raw_api.query(**params)
+
+
 # === INFO ENDPOINT ===
 @app.post("/orbits/info", summary="Retrieve orbit family metadata")
 def get_family_info(req: BaseQueryRequest):
@@ -176,7 +181,7 @@ def get_filtered_family(req: FilteredQueryRequest):
      """
     try:
         params = {k: v for k, v in req.model_dump().items() if v is not None}  # MODIFIED
-        result = cached_nasa_query(**params)  # MODIFIED
+        result = query_nasa_direct(**params)  # MODIFIED
         return result  # MODIFIED
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
