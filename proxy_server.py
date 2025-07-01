@@ -138,10 +138,10 @@ class OrbitFamilyPlotRequest(BaseModel):
     elev: int = 30
 
 # ==== Helper ====
-@lru_cache(maxsize=500)
-def cached_nasa_query(**params):
-    raw_api = CR3BPOrbitAPI(use_proxy=False)
-    return raw_api.query(**params)
+# @lru_cache(maxsize=500)
+# def cached_nasa_query(**params):
+#     raw_api = CR3BPOrbitAPI(use_proxy=False)
+#     return raw_api.query(**params)
 
 def query_nasa_direct(**params):
     raw_api = CR3BPOrbitAPI(use_proxy=False)
