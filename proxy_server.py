@@ -151,6 +151,10 @@ def query_nasa_direct(**params):
 
 
 # === INFO ENDPOINT ===
+# Ensure directory exists
+results_dir = os.path.join("static", "results")
+os.makedirs(results_dir, exist_ok=True)
+
 # Mount static folder to serve files
 app.mount("/results", StaticFiles(directory="static/results"), name="results")
 
@@ -166,9 +170,6 @@ def get_family_info(req: BaseQueryRequest):
             branch=req.branch,
             periodunits=req.periodunits
         )
-        # Ensure directory exists
-        results_dir = os.path.join("static", "results")
-        os.makedirs(results_dir, exist_ok=True)
 
         # Create filename and path
         filename = f"{req.sys}-{req.family}-L{req.libr or 0}-{req.branch or 'X'}.json"
