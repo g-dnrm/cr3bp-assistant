@@ -166,15 +166,19 @@ def get_family_info(req: BaseQueryRequest):
             branch=req.branch,
             periodunits=req.periodunits
         )
-        # Create filename and path
-        filename = f"{req.sys}-{req.family}-L{req.libr or 0}-{req.branch or 'X'}.json"
+        # Ensure directory exists
         results_dir = os.path.join("static", "results")
         os.makedirs(results_dir, exist_ok=True)
+
+        # Create filename and path
+        filename = f"{req.sys}-{req.family}-L{req.libr or 0}-{req.branch or 'X'}.json"
         filepath = os.path.join(results_dir, filename)
 
         with open(filepath, "w") as f:
             json.dump(result, f, indent=2)
 
+        print("🔧 Writing file to:", filepath)
+        print("🔁 Returning download path:", f"/results/{filename}")
         return {
             "download": f"/results/{filename}"
         }

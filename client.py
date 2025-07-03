@@ -28,10 +28,9 @@ import argparse
 BASE_URL = "https://cr3bp-proxy.onrender.com"  # Replace with your Render or local proxy URL
 
 # === Functions ===
-
 def get_family_info(args):
     """
-     Calls /orbits/info and downloads the .json file with the orbit family info.
+    Calls /orbits/info and downloads the .json file with the orbit family info.
     """
     payload = {
         "sys": args.system,
@@ -47,6 +46,7 @@ def get_family_info(args):
     r.raise_for_status()
     download_info = r.json()
 
+    print("🔍 Raw Response:", download_info)
     if "download" not in download_info:
         print("❌ No 'download' key in response.")
         return
@@ -61,7 +61,6 @@ def get_family_info(args):
     # Step 3: Display result
     print("✅ Family Info (file mode):")
     print(json.dumps(result, indent=2))
-
 
 def filter_orbits(args):
     """
