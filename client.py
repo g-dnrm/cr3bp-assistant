@@ -31,7 +31,7 @@ BASE_URL = "https://cr3bp-proxy.onrender.com"  # Replace with your Render or loc
 
 def get_family_info(args):
     """
-    Calls /orbits/info to get system metadata & valid ranges.
+     Calls /orbits/info and downloads the .json file with the orbit family info.
     """
     payload = {
         "sys": args.system,
@@ -45,8 +45,22 @@ def get_family_info(args):
 
     r = requests.post(f"{BASE_URL}/orbits/info", json=payload)
     r.raise_for_status()
-    print("✅ Family Info:")
-    print(json.dumps(r.json(), indent=2))
+    download_info = r.json()
+
+    if "download" not in download_info:
+        print("❌ No 'download' key in response.")
+        return
+
+    # Step 2: Download the JSON file
+    url = download_info["download"]
+    full_url = f"{BASE_URL}{url}" if not url.startswith("http") else url
+    response = requests.get(full_url)
+    response.raise_for_status()
+    result = response.json()
+
+    # Step 3: Display result
+    print("✅ Family Info (file mode):")
+    print(json.dumps(result, indent=2))
 
 
 def filter_orbits(args):

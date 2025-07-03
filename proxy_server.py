@@ -1,11 +1,13 @@
-from fastapi import FastAPI, Query, Body, HTTPException
+from fastapi import FastAPI, Request, Body, HTTPException
 from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator, model_validator
 from enum import Enum
+import os
 from typing import Optional, Dict, Any, Tuple
 import re
 import tempfile
-from functools import lru_cache
+import json
 
 from core import (
     CR3BPOrbitAPI,
@@ -149,6 +151,9 @@ def query_nasa_direct(**params):
 
 
 # === INFO ENDPOINT ===
+# Mount static folder to serve files
+app.mount("/results", StaticFiles(directory="static/results"), name="results")
+
 @app.post("/orbits/info", summary="Retrieve orbit family metadata")
 def get_family_info(req: BaseQueryRequest):
     try:
@@ -161,7 +166,19 @@ def get_family_info(req: BaseQueryRequest):
             branch=req.branch,
             periodunits=req.periodunits
         )
-        return result
+        # Create filename and path
+        filename = f"{req.sys}-{req.family}-L{req.libr or 0}-{req.branch or 'X'}.json"
+        results_dir = os.path.join("static", "results")
+        os.makedirs(results_dir, exist_ok=True)
+        filepath = os.path.join(results_dir, filename)
+
+        with open(filepath, "w") as f:
+            json.dump(result, f, indent=2)
+
+        return {
+            "download": f"/results/{filename}"
+        }
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
