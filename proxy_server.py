@@ -144,7 +144,7 @@ class OrbitFamilyPlotRequest(BaseModel):
 #     return raw_api.query(**params)
 
 def query_nasa_direct(**params):
-    raw_api = CR3BPOrbitAPI(use_proxy=False)
+    raw_api = CR3BPOrbitAPI()
     return raw_api.query(**params)
 
 
@@ -152,7 +152,7 @@ def query_nasa_direct(**params):
 @app.post("/orbits/info", summary="Retrieve orbit family metadata")
 def get_family_info(req: BaseQueryRequest):
     try:
-        api = CR3BPOrbitAPI(use_proxy=False)
+        api = CR3BPOrbitAPI()
         builder = CR3BPQueryBuilder(api)
         result = builder.query_raw_info(
             sys=req.sys,

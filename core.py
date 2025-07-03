@@ -47,15 +47,11 @@ class CR3BPOrbitAPI:
         "resonant": {}
     }
 
-    def __init__(self, use_proxy=False):
+    def __init__(self):
         """
-        Initializes the API with optional proxy routing.
+        Initializes the API
         """
-        self.BASE_URL = (
-            "https://your-server.com/query_orbits"
-            if use_proxy else
-            "https://ssd-api.jpl.nasa.gov/periodic_orbits.api"
-        )
+        self.BASE_URL = "https://ssd-api.jpl.nasa.gov/periodic_orbits.api"
         self.session = requests.Session()
 
     def query(self, **params):
