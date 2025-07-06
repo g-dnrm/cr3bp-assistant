@@ -18,7 +18,6 @@ from core import (
 )
 
 app = FastAPI(title="CR3BP Periodic Orbits Assistant")
-
 @app.get("/")
 def root():
     return {
