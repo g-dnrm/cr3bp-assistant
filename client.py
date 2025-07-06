@@ -42,24 +42,13 @@ def get_family_info(args):
     if args.branch is not None:
         payload["branch"] = args.branch
 
+    # Send request and receive raw metadata directly
     r = requests.post(f"{BASE_URL}/orbits/info", json=payload)
     r.raise_for_status()
-    download_info = r.json()
+    result = r.json()
 
-    print("🔍 Raw Response:", download_info)
-    if "download" not in download_info:
-        print("❌ No 'download' key in response.")
-        return
-
-    # Step 2: Download the JSON file
-    url = download_info["download"]
-    full_url = f"{BASE_URL}{url}" if not url.startswith("http") else url
-    response = requests.get(full_url)
-    response.raise_for_status()
-    result = response.json()
-
-    # Step 3: Display result
-    print("✅ Family Info (file mode):")
+    # Display result directly (no download step needed)
+    print("✅ Family Info (inline mode):")
     print(json.dumps(result, indent=2))
 
 def filter_orbits(args):
