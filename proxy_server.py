@@ -163,7 +163,18 @@ def get_family_info(req: BaseQueryRequest):
             periodunits=req.periodunits
         )
 
-        return JSONResponse(content=result)
+        # Extract only the allowed metadata
+        response_data = {
+            "signature": result.get("signature"),
+            "system": result.get("system"),
+            "limits": result.get("limits"),
+            "count": result.get("count"),
+            "family": result.get("family"),
+            "libration_point": result.get("libration_point"),
+            "branch": result.get("branch")
+        }
+
+        return JSONResponse(content=response_data)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
