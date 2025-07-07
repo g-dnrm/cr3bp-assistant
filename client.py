@@ -30,7 +30,7 @@ BASE_URL = "https://cr3bp-proxy.onrender.com"  # Replace with your Render or loc
 # === Functions ===
 def get_family_info(args):
     """
-    Calls /orbits/info and downloads the .json file with the orbit family info.
+    Calls /orbits/info
     """
     payload = {
         "sys": args.system,
@@ -47,7 +47,7 @@ def get_family_info(args):
     r.raise_for_status()
     result = r.json()
 
-    # Display result directly (no download step needed)
+    # Display result directly
     print("✅ Family Info (inline mode):")
     print(json.dumps(result, indent=2))
 
