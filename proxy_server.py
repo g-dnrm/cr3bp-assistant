@@ -17,7 +17,12 @@ from core import (
     CR3BPPlotter
 )
 
-app = FastAPI(title="CR3BP Periodic Orbits Assistant")
+app = FastAPI(
+    title="CR3BP Periodic Orbits Assistant",
+    servers=[
+        {"url": "https://cr3bp-orbit-catalog-assistant.fly.dev", "description": "CR3BP Assistant API"}
+    ]
+)
 @app.get("/")
 def root():
     return {

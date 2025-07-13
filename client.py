@@ -25,7 +25,7 @@ import json
 import argparse
 
 # === Config ===
-BASE_URL = "https://cr3bp-proxy.onrender.com"  # Replace with your Render or local proxy URL
+BASE_URL = "https://cr3bp-orbit-catalog-assistant.fly.dev"  # Replace with your Render or local proxy URL
 
 # === Functions ===
 def get_family_info(args):
